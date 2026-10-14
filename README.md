@@ -8,7 +8,8 @@ a cada batida.
 
 Não precisa compilar nada: o arquivo [`shaders/boombox.shader`](shaders/boombox.shader)
 roda no plugin **[Shaderfilter](https://github.com/exeldro/obs-shaderfilter)
-(exeldro)** numa versão com suporte a áudio (testado na 2.6.0; atualize se a sua não mostrar “Audio source”).
+(exeldro)** versão **2.6.0 ou mais nova**. O áudio (`audio_peak`/`audio_magnitude`)
+só entrou na 2.6.0 (dez/2025); nas versões anteriores o shader carrega, mas nada reage.
 
 1. Botão direito na fonte — ou na **cena**, para a tela inteira — → *Filtros* → **+** →
    **User-defined shader**.
@@ -16,6 +17,26 @@ roda no plugin **[Shaderfilter](https://github.com/exeldro/obs-shaderfilter)
    (ou cole o conteúdo em *Shader text* e clique em *Reload effect*).
 3. Em **Audio source** escolha a fonte de som (Desktop Audio, música, mic…).
 4. Ligue **Simular batida** para ajustar sem música; depois desligue.
+
+### Não está reagindo? (checklist)
+
+1. **Ligue “Simular batida”.** Se a imagem pulsar, o shader está ok e o problema é o
+   áudio. Se nem assim pulsar, o shader não compilou: veja *Ajuda → Arquivos de log*
+   e procure por erros do `obs-shaderfilter`.
+2. **Ligue “Mostrar medidor”.** Aparecem 4 barras no canto inferior esquerdo:
+   vermelho = pico, azul = RMS (como chegam do OBS), amarelo = Batida e verde = Corpo
+   (depois dos ajustes). A linha branca é o piso de ruído.
+   - **Vermelho/azul parados em zero** → o shader não recebe áudio:
+     - Confira a versão do Shaderfilter (*Ferramentas → … / Sobre*, ou o nome do
+       instalador). Precisa ser **2.6.0+**: sem ela o campo **Audio source** nem
+       aparece nas propriedades do filtro.
+     - Em **Audio source** escolha a fonte que toca a música (ex.: *Desktop Audio*/
+       *Áudio da área de trabalho*). Com *None*, ele usa o áudio da própria fonte
+       filtrada, e uma cena **não** inclui o Desktop Audio.
+     - O nível é medido depois do volume do mixer: a fonte não pode estar muda nem
+       com o volume no zero.
+   - **Vermelho/azul mexem, amarelo/verde não** → baixe o **Piso de ruído** (ex.: -50 dB),
+     aumente a **Sensibilidade** ou reduza a **Curva de punch**.
 
 | Grupo | O que faz |
 |---|---|

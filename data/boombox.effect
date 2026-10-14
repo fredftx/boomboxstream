@@ -40,25 +40,25 @@ float4 PSBoombox(VertData v_in) : TARGET
 
 	float3 color = base.rgb * (1.0 + flash);
 
-	if (bloom_intensity > 0.0001) {
-		float3 acc = float3(0.0, 0.0, 0.0);
-		float wsum = 0.0;
-		float knee = max(1.0 - bloom_threshold, 0.001);
+	// Sem "if" em volta do loop: o Direct3D recusa amostrar textura dentro
+	// de loop com desvio condicional.
+	float3 acc = float3(0.0, 0.0, 0.0);
+	float wsum = 0.0;
+	float knee = max(1.0 - bloom_threshold, 0.001);
 
-		for (int i = 0; i < 32; i++) {
-			float fi = float(i) + 0.5;
-			float r = sqrt(fi / 32.0);
-			float a = fi * 2.39996323;
-			float2 off = float2(cos(a), sin(a)) * (r * bloom_radius) * uv_pixel;
-			float4 s = image.Sample(textureSampler, uv + off);
-			float3 bright = max(s.rgb - bloom_threshold, 0.0) / knee;
-			float w = exp(-2.5 * r * r);
-			acc += bright * w;
-			wsum += w;
-		}
-
-		color += (acc / wsum) * bloom_intensity * bloom_tint;
+	for (int i = 0; i < 32; i++) {
+		float fi = float(i) + 0.5;
+		float r = sqrt(fi / 32.0);
+		float a = fi * 2.39996323;
+		float2 off = float2(cos(a), sin(a)) * (r * bloom_radius) * uv_pixel;
+		float4 s = image.Sample(textureSampler, uv + off);
+		float3 bright = max(s.rgb - bloom_threshold, 0.0) / knee;
+		float w = exp(-2.5 * r * r);
+		acc += bright * w;
+		wsum += w;
 	}
+
+	color += (acc / wsum) * bloom_intensity * bloom_tint;
 
 	float glow = max(max(color.r, color.g), color.b);
 	float alpha = saturate(max(base.a, glow));

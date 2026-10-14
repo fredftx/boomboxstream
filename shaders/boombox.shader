@@ -1,6 +1,6 @@
 // =============================================================================
 //  BoomBox Stream — shader reativo ao áudio para o plugin "Shaderfilter"
-//  (obs-shaderfilter do exeldro com suporte a áudio — testado na 2.6.0).
+//  (obs-shaderfilter do exeldro, versão 2.6.0+).
 //
 //  A fonte/tela pulsa como um alto-falante: zoom + vibração do cone,
 //  bloom, flash, aberração cromática e tremor de câmera.
@@ -11,7 +11,11 @@
 //   2. Marque "Load shader text from file" e escolha este arquivo
 //      (ou cole o texto em "Shader text" e clique em "Reload effect").
 //   3. Em "Audio source" escolha de onde vem o som (Desktop Audio, música…).
-//      Dica: ligue "Simular batida" para ajustar sem música tocando.
+//      Dica: ligue "Simular batida" para ajustar sem música tocando, e
+//      "Mostrar medidor" para ver se o áudio está chegando.
+//
+//  REQUISITO: Shaderfilter 2.6.0 ou mais novo. Versões anteriores não têm
+//  áudio — o campo "Audio source" nem aparece e nada reage.
 //
 //  DE ONDE VEM O ÁUDIO
 //   O Shaderfilter entrega dois níveis (0..1 = -60..0 dB, faixa completa):
@@ -65,6 +69,11 @@ uniform float Test_BPM<
 	float maximum = 200.0;
 	float step = 1.0;
 > = 120.0;
+
+uniform bool Show_Meter<
+	string label = "Mostrar medidor (diagnóstico: barras de áudio no canto)";
+	string group = "Áudio";
+> = false;
 
 // ------------------------------------------------------------------ Zoom -----
 
@@ -321,27 +330,57 @@ float4 mainImage(VertData v_in) : TARGET
 	color *= 1.0 + bloom_drv * Flash / 100.0;
 
 	// --- Bloom: espiral de 32 amostras (ângulo áureo) -------------------------
+	// Sem "if" em volta do loop: o compilador do Direct3D (Windows) recusa
+	// amostrar textura dentro de loop com desvio condicional.
 	float bloom = max(Bloom_Base + bloom_drv * Bloom_Amount, 0.0);
-	if (bloom > 0.0001) {
-		float radius = Bloom_Radius * (0.6 + 0.4 * bloom_drv);
-		float knee = max(1.0 - Bloom_Threshold, 0.001);
-		float3 acc = float3(0.0, 0.0, 0.0);
-		float wsum = 0.0;
+	float radius = Bloom_Radius * (0.6 + 0.4 * bloom_drv);
+	float knee = max(1.0 - Bloom_Threshold, 0.001);
+	float3 acc = float3(0.0, 0.0, 0.0);
+	float wsum = 0.0;
 
-		for (int i = 0; i < 32; i++) {
-			float fi = float(i) + 0.5;
-			float r = sqrt(fi / 32.0);
-			float a = fi * 2.39996323;
-			float2 off = float2(cos(a), sin(a)) * (r * radius) * uv_pixel_interval;
-			float3 s = bb_sample(uv + off).rgb;
-			float w = exp(-2.5 * r * r);
-			acc += max(s - Bloom_Threshold, 0.0) / knee * w;
-			wsum += w;
-		}
-
-		color += (acc / wsum) * bloom * Bloom_Color.rgb;
+	for (int i = 0; i < 32; i++) {
+		float fi = float(i) + 0.5;
+		float r = sqrt(fi / 32.0);
+		float a = fi * 2.39996323;
+		float2 off = float2(cos(a), sin(a)) * (r * radius) * uv_pixel_interval;
+		float3 s = bb_sample(uv + off).rgb;
+		float w = exp(-2.5 * r * r);
+		acc += max(s - Bloom_Threshold, 0.0) / knee * w;
+		wsum += w;
 	}
 
+	color += (acc / wsum) * bloom * Bloom_Color.rgb;
+
 	float glow = max(max(color.r, color.g), color.b);
-	return float4(saturate(color), saturate(max(base.a, glow)));
+	float4 result = float4(saturate(color), saturate(max(base.a, glow)));
+
+	// --- Medidor de diagnóstico ------------------------------------------------
+	// Canto inferior esquerdo, 4 barras: vermelho = pico bruto, azul = RMS bruto,
+	// amarelo = "Batida" e verde = "Corpo" depois dos ajustes.
+	// A linha branca é o piso de ruído. Barras paradas em zero = o shader não
+	// está recebendo áudio (veja "Audio source" / versão do Shaderfilter).
+	if (Show_Meter) {
+		float2 px = v_in.uv * uv_size;
+		float2 org = float2(16.0, uv_size.y - 16.0);
+		float bar_h = 160.0;
+		float lx = px.x - org.x;
+		float ly = org.y - px.y;
+		if (lx >= 0.0 && lx < 4.0 * 22.0 && ly >= 0.0 && ly < bar_h) {
+			int idx = int(lx / 22.0);
+			float inside = step(lx - float(idx) * 22.0, 16.0);
+			float v = audio_peak;
+			float3 c = float3(1.0, 0.25, 0.25);
+			if (idx == 1) { v = audio_magnitude; c = float3(0.3, 0.5, 1.0); }
+			if (idx == 2) { v = hit; c = float3(1.0, 0.85, 0.2); }
+			if (idx == 3) { v = body; c = float3(0.3, 1.0, 0.4); }
+			float fill = step(ly / bar_h, v) * inside;
+			float floor_line = (idx < 2 && abs(ly / bar_h - (Noise_Floor_dB + 60.0) / 60.0) * bar_h < 1.0) ? 1.0 : 0.0;
+			float3 bg = result.rgb * 0.35;
+			result.rgb = lerp(bg, c, fill * inside);
+			result.rgb = lerp(result.rgb, float3(1.0, 1.0, 1.0), floor_line * inside);
+			result.a = 1.0;
+		}
+	}
+
+	return result;
 }

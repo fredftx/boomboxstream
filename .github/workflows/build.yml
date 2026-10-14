@@ -1,0 +1,23 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install libobs
+        run: sudo apt-get update && sudo apt-get install -y libobs-dev cmake build-essential
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+      - name: Build
+        run: cmake --build build
+      - name: Package
+        run: DESTDIR="$PWD/dist" cmake --install build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: boomboxstream-linux
+          path: dist/

@@ -8,7 +8,7 @@ a cada batida.
 
 Não precisa compilar nada: o arquivo [`shaders/boombox.shader`](shaders/boombox.shader)
 roda no plugin **[Shaderfilter](https://github.com/exeldro/obs-shaderfilter)
-(exeldro) versão 2.5 ou mais nova**, que já tem suporte a áudio.
+(exeldro)** numa versão com suporte a áudio (testado na 2.6.0; atualize se a sua não mostrar “Audio source”).
 
 1. Botão direito na fonte — ou na **cena**, para a tela inteira — → *Filtros* → **+** →
    **User-defined shader**.

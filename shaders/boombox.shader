@@ -1,6 +1,6 @@
 // =============================================================================
 //  BoomBox Stream — shader reativo ao áudio para o plugin "Shaderfilter"
-//  (obs-shaderfilter do exeldro, versão 2.5+ com suporte a áudio).
+//  (obs-shaderfilter do exeldro com suporte a áudio — testado na 2.6.0).
 //
 //  A fonte/tela pulsa como um alto-falante: zoom + vibração do cone,
 //  bloom, flash, aberração cromática e tremor de câmera.

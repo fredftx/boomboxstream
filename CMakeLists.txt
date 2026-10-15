@@ -1,8 +1,20 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(boomboxstream VERSION 0.1.0 LANGUAGES C)
+project(boomboxstream VERSION 0.2.0 LANGUAGES C)
 
-find_package(libobs REQUIRED)
+# Caminho normal: libobs instalado ou um build do OBS (libobsConfig.cmake).
+# Alternativa sem compilar o OBS: headers do código-fonte + import libs geradas
+# a partir das DLLs de uma instalação (é o que o CI do Windows faz):
+#   -DLIBOBS_INCLUDE_DIR=.../obs-studio/libobs -DLIBOBS_LIB=.../obs.lib
+#   -DW32_PTHREADS_INCLUDE_DIR=.../deps/w32-pthreads -DW32_PTHREADS_LIB=.../w32-pthreads.lib
+if(LIBOBS_INCLUDE_DIR AND LIBOBS_LIB)
+	add_library(OBS::libobs INTERFACE IMPORTED)
+	set_target_properties(OBS::libobs PROPERTIES
+		INTERFACE_INCLUDE_DIRECTORIES "${LIBOBS_INCLUDE_DIR};${W32_PTHREADS_INCLUDE_DIR}"
+		INTERFACE_LINK_LIBRARIES "${LIBOBS_LIB};${W32_PTHREADS_LIB}")
+else()
+	find_package(libobs REQUIRED)
+endif()
 
 add_library(boomboxstream MODULE
 	src/plugin-main.c

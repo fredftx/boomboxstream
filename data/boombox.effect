@@ -1,18 +1,23 @@
-// BoomBox Stream - zoom + bloom reativos ao áudio.
-// Tudo numa única passada: o UV é escalado em torno do centro (zoom) e o
-// bloom é uma soma de amostras em espiral (ângulo áureo) das partes claras.
+// BoomBox Stream - zoom, tremor, aberração cromática, bloom e flash
+// reativos ao áudio, numa única passada.
 
 uniform float4x4 ViewProj;
 uniform texture2d image;
 
 uniform float2 uv_pixel;        // 1 / tamanho da textura
+uniform float2 tex_size;        // tamanho da textura em pixels
 uniform float2 zoom_center;     // centro do zoom em UV (0..1)
 uniform float  zoom;            // >= 1.0
+uniform float2 shake;           // deslocamento do tremor em UV
+uniform float  aberration;      // separação RGB em pixels (na borda)
 uniform float  bloom_intensity; // 0 = sem bloom
 uniform float  bloom_threshold; // 0..1, só o que for mais claro que isso brilha
 uniform float  bloom_radius;    // em pixels
 uniform float3 bloom_tint;
 uniform float  flash;           // ganho extra de brilho no pico
+uniform float  show_meter;      // 1 = desenha o medidor das bandas
+uniform float4 meter_a;         // zoom, bloom, flash, aberração (0..1)
+uniform float  meter_b;         // tremor (0..1)
 
 sampler_state textureSampler {
 	Filter    = Linear;
@@ -35,34 +40,66 @@ VertData VSDefault(VertData v_in)
 
 float4 PSBoombox(VertData v_in) : TARGET
 {
-	float2 uv = zoom_center + (v_in.uv - zoom_center) / zoom;
+	float2 uv = zoom_center + (v_in.uv - zoom_center) / zoom + shake;
+
+	// Aberração cromática radial: vermelho para fora, azul para dentro.
+	float2 ab = (uv - zoom_center) * 2.0 * aberration * uv_pixel;
 	float4 base = image.Sample(textureSampler, uv);
+	float r = image.Sample(textureSampler, uv + ab).r;
+	float b = image.Sample(textureSampler, uv - ab).b;
 
-	float3 color = base.rgb * (1.0 + flash);
+	float3 color = float3(r, base.g, b) * (1.0 + flash);
 
-	// Sem "if" em volta do loop: o Direct3D recusa amostrar textura dentro
-	// de loop com desvio condicional.
+	// Bloom: espiral de 32 amostras (ângulo áureo). Sem "if" em volta do
+	// loop: o Direct3D recusa amostrar textura dentro de loop com desvio
+	// condicional.
 	float3 acc = float3(0.0, 0.0, 0.0);
 	float wsum = 0.0;
 	float knee = max(1.0 - bloom_threshold, 0.001);
 
 	for (int i = 0; i < 32; i++) {
 		float fi = float(i) + 0.5;
-		float r = sqrt(fi / 32.0);
+		float rr = sqrt(fi / 32.0);
 		float a = fi * 2.39996323;
-		float2 off = float2(cos(a), sin(a)) * (r * bloom_radius) * uv_pixel;
-		float4 s = image.Sample(textureSampler, uv + off);
-		float3 bright = max(s.rgb - bloom_threshold, 0.0) / knee;
-		float w = exp(-2.5 * r * r);
-		acc += bright * w;
+		float2 off = float2(cos(a), sin(a)) * (rr * bloom_radius) * uv_pixel;
+		float3 s = image.Sample(textureSampler, uv + off).rgb;
+		float w = exp(-2.5 * rr * rr);
+		acc += max(s - bloom_threshold, 0.0) / knee * w;
 		wsum += w;
 	}
 
 	color += (acc / wsum) * bloom_intensity * bloom_tint;
 
 	float glow = max(max(color.r, color.g), color.b);
-	float alpha = saturate(max(base.a, glow));
-	return float4(saturate(color), alpha);
+	float4 result = float4(saturate(color), saturate(max(base.a, glow)));
+
+	// Medidor (canto inferior esquerdo): uma barra por efeito.
+	// laranja = zoom, branco = bloom, ciano = flash, magenta = aberração,
+	// verde = tremor.
+	if (show_meter > 0.5) {
+		float2 px = v_in.uv * tex_size;
+		float lx = px.x - 16.0;
+		float ly = (tex_size.y - 16.0) - px.y;
+		float bar_h = 160.0;
+
+		if (lx >= 0.0 && lx < 5.0 * 22.0 && ly >= 0.0 && ly < bar_h) {
+			float idx = floor(lx / 22.0);
+			float inside = step(lx - idx * 22.0, 16.0);
+
+			float v = meter_a.x;
+			float3 c = float3(1.0, 0.55, 0.1);
+			if (idx > 0.5) { v = meter_a.y; c = float3(1.0, 1.0, 1.0); }
+			if (idx > 1.5) { v = meter_a.z; c = float3(0.2, 0.9, 1.0); }
+			if (idx > 2.5) { v = meter_a.w; c = float3(1.0, 0.3, 0.9); }
+			if (idx > 3.5) { v = meter_b;   c = float3(0.3, 1.0, 0.4); }
+
+			float fill = step(ly / bar_h, v) * inside;
+			result.rgb = lerp(result.rgb * 0.35, c, fill);
+			result.a = 1.0;
+		}
+	}
+
+	return result;
 }
 
 technique Draw

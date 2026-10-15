@@ -3,6 +3,7 @@ name: build
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   linux:
@@ -20,4 +21,68 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: boomboxstream-linux
+          path: dist/
+
+  windows:
+    runs-on: windows-2022
+    env:
+      # Compila contra a API do OBS 30.2; roda também no OBS 31/32.
+      OBS_VERSION: 30.2.3
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Fetch OBS headers
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch $env:OBS_VERSION --filter=blob:none --sparse https://github.com/obsproject/obs-studio.git obs-src
+          git -C obs-src sparse-checkout set libobs deps/w32-pthreads
+
+      - name: Fetch OBS DLLs and make import libraries
+        shell: pwsh
+        run: |
+          $zip = "OBS-Studio-$env:OBS_VERSION-Windows.zip"
+          Invoke-WebRequest "https://github.com/obsproject/obs-studio/releases/download/$env:OBS_VERSION/$zip" -OutFile obs.zip
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          New-Item -ItemType Directory -Force sdk | Out-Null
+          $archive = [System.IO.Compression.ZipFile]::OpenRead("$PWD/obs.zip")
+          foreach ($name in 'obs', 'w32-pthreads') {
+            $entry = $archive.GetEntry("bin/64bit/$name.dll")
+            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, "$PWD/sdk/$name.dll", $true)
+            $exports = dumpbin /exports "sdk/$name.dll" | ForEach-Object {
+              if ($_ -match '^\s+\d+\s+[0-9A-F]+\s+[0-9A-F]{8}\s+(\S+)') { $Matches[1] }
+            }
+            if (-not $exports) { throw "no exports found in $name.dll" }
+            Set-Content "sdk/$name.def" (@("LIBRARY $name", "EXPORTS") + $exports)
+            lib /nologo /def:"sdk/$name.def" /machine:x64 /out:"sdk/$name.lib"
+            if ($LASTEXITCODE -ne 0) { throw "lib failed for $name" }
+            Write-Host "$name.dll: $($exports.Count) exports"
+          }
+          $archive.Dispose()
+
+      - name: Configure
+        shell: pwsh
+        run: >
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+          -DLIBOBS_INCLUDE_DIR="$PWD/obs-src/libobs"
+          -DLIBOBS_LIB="$PWD/sdk/obs.lib"
+          -DW32_PTHREADS_INCLUDE_DIR="$PWD/obs-src/deps/w32-pthreads"
+          -DW32_PTHREADS_LIB="$PWD/sdk/w32-pthreads.lib"
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Package
+        shell: pwsh
+        run: |
+          cmake --install build --config Release --prefix dist
+          Copy-Item README.md dist/
+          Get-ChildItem -Recurse dist | Select-Object FullName
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: boomboxstream-windows-x64
           path: dist/

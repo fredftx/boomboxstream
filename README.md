@@ -55,43 +55,68 @@ mistura e o bloom, a aberração e o tremor reagem às batidas.
 > há filtro de graves, ataque/release nem a mola com “balanço”. Para isso, use o plugin
 > nativo abaixo.
 
-## Opção 2 — Plugin nativo (filtro BoomBox)
+## Opção 2 — Plugin nativo (filtro BoomBox) — cada efeito na sua faixa de frequência
 
-Analisa o áudio por conta própria: passa-baixa para os graves, envelope de
-ataque/release e a física de mola do cone.
+Analisa o áudio por conta própria. **Cada efeito escuta a sua própria faixa de
+frequência** (passa-banda Butterworth de 4ª ordem), com sensibilidade e
+ataque/release próprios. Por exemplo: o zoom no bumbo, o bloom nos vocais e o
+flash nos pratos.
+
+### Instalar no Windows
+
+1. Baixe o artefato **`boomboxstream-windows-x64`** do último build em
+   *Actions → build* deste repositório.
+2. Feche o OBS e extraia o conteúdo dentro da pasta do OBS
+   (normalmente `C:\Program Files\obs-studio`). Ficam
+   `obs-plugins\64bit\boomboxstream.dll` e `data\obs-plugins\boomboxstream\…`.
+3. Abra o OBS → botão direito na fonte ou na **cena** → *Filtros* → **+** →
+   **BoomBox (Reativo ao Áudio)**.
+
+Compilado contra a API do OBS 30.2, funciona no OBS 30, 31 e 32.
 
 ### Como usar
 
-1. Instale o plugin (veja abaixo) e reinicie o OBS.
-2. Clique com o botão direito numa **fonte** → *Filtros* → **+** → **BoomBox (Reativo ao Áudio)**.
-   - Para a **tela inteira** reagir, adicione o filtro na **cena** (botão direito na cena → *Filtros*).
-3. Escolha a **Fonte de áudio**:
-   - *Áudio da área de trabalho* (padrão) — o som global do PC;
-   - *Esta fonte* — usa o próprio áudio da fonte filtrada (ex.: fonte de mídia, navegador);
-   - ou qualquer outra fonte com áudio (microfone, Spotify via captura de app etc.).
+1. Em **Áudio**, escolha a **Fonte de áudio**: *Áudio da área de trabalho* (padrão),
+   *Esta fonte* (o áudio da própria fonte filtrada) ou qualquer outra fonte com som.
+2. Ligue/desligue cada efeito pela caixinha do grupo e escolha a **Faixa de frequência**.
+3. Ligue **Mostrar medidor das faixas** para ver no canto da tela quanto cada efeito
+   está reagindo: laranja = zoom, branco = bloom, ciano = flash,
+   magenta = aberração, verde = tremor.
+
+### Faixas pré-definidas
+
+| Faixa | Hz | Pega |
+|---|---|---|
+| Bumbo / sub | 40–120 | kick, 808 |
+| Graves | 60–250 | baixo + bumbo |
+| Médio-graves | 250–800 | corpo de voz e guitarras |
+| Vocais | 300–3400 | voz |
+| Médios | 500–4000 | voz, caixa, guitarras |
+| Caixa / ataque | 1500–5000 | estalo da caixa, ataques |
+| Agudos / pratos | 6000–16000 | pratos, chimbal |
+| Faixa completa | tudo | — |
+| **Personalizada…** | você escolhe a mínima e a máxima | — |
 
 ### Ajustes
 
-| Grupo | Parâmetro | O que faz |
-|---|---|---|
-| Áudio | Reage a | *Graves/bumbo* (passa-baixa de 2 polos) ou *faixa completa* |
-| | Corte dos graves | Frequência do passa-baixa (120 Hz pega bem o bumbo) |
-| | Sensibilidade | Ganho em dB antes da análise |
-| | Piso de ruído | Abaixo disso nada reage |
-| | Curva de resposta | >1 deixa partes calmas paradas e batidas fortes com mais *punch* |
-| | Ataque / Release | Velocidade de subida / queda do envelope |
-| | Elasticidade | Simula a mola do cone do falante — com overshoot e “balanço” |
-| Zoom | Zoom máximo | Quanto amplia no pico (6% já é bem visível) |
-| | Centro X / Y | Ponto em torno do qual o zoom acontece |
-| Bloom | Bloom base | Brilho constante mesmo sem som |
-| | Bloom na batida | Intensidade extra do bloom no pico |
-| | Limiar do bloom | Só o que for mais claro que isso brilha |
-| | Raio / Cor | Tamanho (px) e cor do glow |
-| | Flash de brilho | Clareia a imagem inteira no pico |
+| Grupo | Parâmetros |
+|---|---|
+| Áudio (global) | Fonte de áudio, piso de ruído, curva de resposta, medidor |
+| Em **todo** efeito | Faixa de frequência, mínima/máxima (Hz, na personalizada), sensibilidade (dB), ataque, release |
+| Zoom (cone do falante) | Zoom máximo, elasticidade (mola com “balanço”), centro X/Y — padrão: **bumbo** |
+| Bloom | Intensidade na batida, base, limiar, raio, cor — padrão: **médios**, +6 dB |
+| Flash de brilho | Intensidade — padrão: **agudos/pratos**, +12 dB |
+| Aberração cromática | Separação RGB (px) — desligado por padrão |
+| Tremor de câmera | Intensidade (px), velocidade — desligado por padrão |
+
+> Dica: as faixas médias e agudas têm bem menos energia que os graves na música, por
+> isso o bloom e o flash já vêm com sensibilidade extra. Use o medidor para equilibrar.
 
 ### Compilar
 
-Requer CMake ≥ 3.16 e o `libobs` (headers + CMake config).
+Requer CMake ≥ 3.16 e o `libobs` (headers + CMake config), ou headers + import
+libs passados à mão (veja o topo do `CMakeLists.txt` e o job `windows` em
+`.github/workflows/build.yml`).
 
 #### Linux
 
@@ -123,11 +148,13 @@ No Windows isso coloca a DLL em `obs-plugins/64bit/` e os dados em
 ## Como funciona
 
 ```
-thread de áudio  ─► callback de captura: mixa p/ mono → passa-baixa → soma RMS
-thread de vídeo  ─► tick: RMS → dB → normaliza (piso/ganho/curva)
-                          → envelope ataque/release → mola do cone
+thread de áudio  ─► callback de captura: mixa p/ mono → 1 passa-banda por efeito
+                    (Butterworth 4ª ordem: 2 biquads passa-alta + 2 passa-baixa) → RMS
+thread de vídeo  ─► tick, por efeito: RMS → dB → normaliza (piso/sensibilidade/curva)
+                          → envelope ataque/release; o zoom ainda passa pela mola
                  ─► render: shader de uma passada (data/boombox.effect)
-                          zoom no UV + bloom em espiral de 32 amostras + flash
+                          zoom + tremor no UV, aberração RGB, bloom em espiral
+                          de 32 amostras, flash e medidor
 ```
 
 - `src/boombox-filter.c` — análise de áudio, física da mola e propriedades.

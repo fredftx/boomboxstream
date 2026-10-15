@@ -1,5 +1,7 @@
 # BoomBox Stream 🔊
 
+*Português (Brasil) · [English](README.en-US.md)*
+
 Plugin para o **OBS Studio** que faz a tela inteira (ou qualquer fonte) **pulsar
 como um alto-falante** no ritmo do áudio: **zoom** + **bloom** + flash de brilho
 a cada batida.
@@ -76,13 +78,20 @@ Baixe da página **[Releases](https://github.com/xFreDxx/boomboxstream/releases)
 Depois: botão direito na fonte ou na **cena** → *Filtros* → **+** →
 **BoomBox (Reativo ao Áudio)**. Compilado contra a API do OBS 30.2, funciona no OBS 30, 31 e 32.
 
+> **“Make sure you trust…” / “O Windows protegeu o computador”:** o instalador ainda não
+> tem assinatura digital, então o Edge e o SmartScreen avisam. No Edge, clique na setinha ao
+> lado de **Delete** → **Keep** → **Keep anyway**. Ao executar, clique em **Mais informações →
+> Executar assim mesmo**. Para evitar os avisos, use o `.zip`.
+
 > Builds de teste de cada commit também ficam em *Actions → build* (artefatos, exigem login
 > no GitHub e expiram em 90 dias).
 
 ### Publicar uma nova versão (mantenedor)
 
 1. Atualize `VERSION` em `project(...)` no `CMakeLists.txt` (ex.: `0.3.0`).
-2. Faça commit e crie/envie a tag com o mesmo número: `git tag v0.3.0 && git push origin v0.3.0`.
+2. Faça commit e crie/envie a tag com o mesmo número:
+   `git tag v0.3.0 && git push origin v0.3.0`. Ou crie a Release pelo GitHub
+   (*Releases → Draft a new release*) com uma tag nova `v0.3.0`.
 3. O CI compila Linux + Windows, gera o zip e o instalador e publica a Release.
    Se a tag não bater com a versão do `CMakeLists.txt`, o build falha de propósito.
 
@@ -170,7 +179,7 @@ thread de vídeo  ─► tick, por efeito: RMS → dB → normaliza (piso/sensib
 ```
 
 - `src/boombox-filter.c` — análise de áudio, física da mola e propriedades.
-- `data/boombox.effect` — shader de zoom + bloom.
+- `data/boombox.effect` — shader do plugin nativo (zoom, tremor, aberração, bloom, flash, medidor).
 - `data/locale/` — textos em pt-BR e en-US.
 - `shaders/boombox.shader` — versão só-shader para o Shaderfilter.
 - `installer/boomboxstream.iss` — instalador do Windows (Inno Setup).

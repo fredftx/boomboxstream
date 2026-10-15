@@ -64,15 +64,27 @@ flash nos pratos.
 
 ### Instalar no Windows
 
-1. Baixe o artefato **`boomboxstream-windows-x64`** do último build em
-   *Actions → build* deste repositório.
-2. Feche o OBS e extraia o conteúdo dentro da pasta do OBS
-   (normalmente `C:\Program Files\obs-studio`). Ficam
-   `obs-plugins\64bit\boomboxstream.dll` e `data\obs-plugins\boomboxstream\…`.
-3. Abra o OBS → botão direito na fonte ou na **cena** → *Filtros* → **+** →
-   **BoomBox (Reativo ao Áudio)**.
+Baixe da página **[Releases](https://github.com/xFreDxx/boomboxstream/releases)**:
 
-Compilado contra a API do OBS 30.2, funciona no OBS 30, 31 e 32.
+- **Instalador (mais fácil):** `boomboxstream-X.Y.Z-windows-x64-installer.exe`. Feche o OBS e
+  execute; ele encontra a pasta do OBS sozinho (pelo registro do Windows) e confere se é a
+  pasta certa. Para remover: *Configurações → Aplicativos → BoomBox Stream*.
+- **Manual:** extraia `boomboxstream-X.Y.Z-windows-x64.zip` dentro da pasta do OBS
+  (normalmente `C:\Program Files\obs-studio`). Ficam
+  `obs-plugins\64bit\boomboxstream.dll` e `data\obs-plugins\boomboxstream\…`.
+
+Depois: botão direito na fonte ou na **cena** → *Filtros* → **+** →
+**BoomBox (Reativo ao Áudio)**. Compilado contra a API do OBS 30.2, funciona no OBS 30, 31 e 32.
+
+> Builds de teste de cada commit também ficam em *Actions → build* (artefatos, exigem login
+> no GitHub e expiram em 90 dias).
+
+### Publicar uma nova versão (mantenedor)
+
+1. Atualize `VERSION` em `project(...)` no `CMakeLists.txt` (ex.: `0.3.0`).
+2. Faça commit e crie/envie a tag com o mesmo número: `git tag v0.3.0 && git push origin v0.3.0`.
+3. O CI compila Linux + Windows, gera o zip e o instalador e publica a Release.
+   Se a tag não bater com a versão do `CMakeLists.txt`, o build falha de propósito.
 
 ### Como usar
 
@@ -161,3 +173,4 @@ thread de vídeo  ─► tick, por efeito: RMS → dB → normaliza (piso/sensib
 - `data/boombox.effect` — shader de zoom + bloom.
 - `data/locale/` — textos em pt-BR e en-US.
 - `shaders/boombox.shader` — versão só-shader para o Shaderfilter.
+- `installer/boomboxstream.iss` — instalador do Windows (Inno Setup).

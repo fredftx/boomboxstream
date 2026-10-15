@@ -17,11 +17,19 @@ jobs:
       - name: Build
         run: cmake --build build
       - name: Package
-        run: DESTDIR="$PWD/dist" cmake --install build
+        run: |
+          DESTDIR="$PWD/dist" cmake --install build
+          VERSION=$(sed -nE 's/^project\(boomboxstream VERSION ([0-9.]+).*/\1/p' CMakeLists.txt)
+          mkdir -p release
+          tar -C dist -czf "release/boomboxstream-$VERSION-linux-x86_64.tar.gz" usr
       - uses: actions/upload-artifact@v4
         with:
           name: boomboxstream-linux
           path: dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          path: release/
 
   windows:
     runs-on: windows-2022
@@ -75,14 +83,66 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
 
-      - name: Package
+      - name: Package (zip + installer)
         shell: pwsh
         run: |
+          $version = (Select-String -Path CMakeLists.txt -Pattern 'project\(boomboxstream VERSION (\d+\.\d+\.\d+)').Matches[0].Groups[1].Value
+          if ($env:GITHUB_REF -like 'refs/tags/v*' -and $env:GITHUB_REF_NAME -ne "v$version") {
+            throw "Tag $env:GITHUB_REF_NAME does not match project version $version in CMakeLists.txt"
+          }
+
           cmake --install build --config Release --prefix dist
-          Copy-Item README.md dist/
           Get-ChildItem -Recurse dist | Select-Object FullName
+
+          New-Item -ItemType Directory -Force release | Out-Null
+          Compress-Archive -Path dist/* -DestinationPath "release/boomboxstream-$version-windows-x64.zip"
+
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          & $iscc /Qp "/DMyAppVersion=$version" "/DSourceDir=$PWD\dist" "/DOutputDir=$PWD\release" installer\boomboxstream.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
+          Get-ChildItem release | Select-Object Name, Length
 
       - uses: actions/upload-artifact@v4
         with:
           name: boomboxstream-windows-x64
           path: dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: release/
+
+  release:
+    # Publica uma Release ao enviar uma tag "vX.Y.Z" (igual à versão do CMakeLists.txt).
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release
+          merge-multiple: true
+      - run: ls -la release
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          body: |
+            ## Instalar no Windows
+            - **Instalador:** baixe `boomboxstream-*-windows-x64-installer.exe`, feche o OBS e execute. Ele encontra a pasta do OBS sozinho.
+            - **Manual:** extraia `boomboxstream-*-windows-x64.zip` dentro da pasta do OBS (normalmente `C:\Program Files\obs-studio`).
+
+            Depois: botão direito na fonte ou na cena → *Filtros* → **+** → **BoomBox (Reativo ao Áudio)**.
+            Compatível com OBS 30, 31 e 32 (64 bits).
+
+            ## Linux
+            `boomboxstream-*-linux-x86_64.tar.gz` (compilado no Ubuntu 24.04): `sudo tar -C / -xzf boomboxstream-*.tar.gz`.
+
+            ## Só shader (plugin Shaderfilter 2.6+)
+            Use `shaders/boombox.shader` do código-fonte.
